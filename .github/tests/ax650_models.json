@@ -30,6 +30,17 @@
     "dynamic_load_pool": 2,
     "max_tokens": 8,
     "prompt": "请用一个词回答：测试。"
+    },
+    {
+    "key": "qwen3_vl_2b_ins_gptq_int4",
+    "enabled": true,
+    "model_id": "AXERA-TECH/Qwen3-VL-2B-Instruct-GPTQ-Int4",
+    "revision": "87bba71b6380f3d1402760625af0b0229441a93a",
+    "input": "image",
+    "fixture": "tools/smoke_assets/qwen3vl_smoke_image.png",
+    "dynamic_load_pool": 2,
+    "max_tokens": 8,
+    "prompt": "请简要描述这张图片"
     }
   ]
 }
