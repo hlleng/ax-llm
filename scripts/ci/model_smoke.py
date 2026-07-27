@@ -22,6 +22,10 @@ def parse_args():
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--prompt", default="请用一个词回答：测试。")
     parser.add_argument("--dynamic-load-pool", type=int, default=0)
+    media = parser.add_mutually_exclusive_group()
+    media.add_argument("--image", type=Path)
+    media.add_argument("--video", type=Path)
+    media.add_argument("--audio", type=Path)
     return parser.parse_args()
 
 
@@ -114,7 +118,7 @@ def main():
     )
     config = verify_model_files(model_dir)
     test_model_dir = dynamic_load_overlay(model_dir, args.dynamic_load_pool)
-    test_config = verify_model_files(test_model_dir)
+    verify_model_files(test_model_dir)
     summary = {
         "model_id": args.model_id,
         "revision": revision,
@@ -123,6 +127,7 @@ def main():
         "tokenizer_type": config.get("tokenizer_type"),
         "axmodel_num": config["axmodel_num"],
         "dynamic_load_pool_size": args.dynamic_load_pool,
+        "media": "image" if args.image else "video" if args.video else "audio" if args.audio else "text",
         "disk": disk_usage(args.model_root),
         "status": "downloaded",
     }
@@ -137,6 +142,12 @@ def main():
             "--prompt",
             args.prompt,
         ]
+        if args.image is not None:
+            command.extend(["--image", str(args.image)])
+        elif args.video is not None:
+            command.extend(["--video", str(args.video)])
+        elif args.audio is not None:
+            command.extend(["--audio", str(args.audio)])
         log_path = args.result_dir / "llm_smoke.log"
         print("执行: " + " ".join(command), flush=True)
         started_at = time.monotonic()

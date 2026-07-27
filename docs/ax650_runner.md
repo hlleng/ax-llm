@@ -16,6 +16,19 @@ RUNNER_TOKEN='一次性注册令牌' bash scripts/ci/register_ax650_runner.sh
 
 脚本必须由 root 启动，并会创建 `github-runner` 系统用户，以该用户调用 `config.sh`，避免触发 Runner 的 root 配置限制。AX650 的 NPU 设备节点仅允许 root 访问，因此 systemd 服务默认以 root 运行；仓库中可调度到该 Runner 的工作流拥有板卡 root 权限，只能用于受信任分支和维护者。
 
+## 代理修改
+
+Runner 服务代理位于 `/etc/systemd/system/actions.runner.hlleng-ax-llm.ax650n-01.service.d/proxy.conf`，负责 Runner 与 GitHub 建立和保持连接。模型验证工作流也显式设置 `HTTP_PROXY` 与 `HTTPS_PROXY`，负责 Job 内的 artifact、Hugging Face 和脚本子进程网络访问。
+
+更换代理时必须同步修改这两处，然后执行：
+
+```bash
+systemctl daemon-reload
+systemctl restart actions.runner.hlleng-ax-llm.ax650n-01.service
+```
+
+不再使用代理时，删除该 `proxy.conf`，同时移除工作流的代理环境变量，再重启 Runner 服务。
+
 验证服务状态：
 
 ```bash

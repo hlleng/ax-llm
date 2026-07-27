@@ -1,0 +1,25 @@
+{
+  "models": [
+    {
+      "key": "qwen3_0_6b",
+      "enabled": true,
+      "model_id": "AXERA-TECH/Qwen3-0.6B",
+      "revision": "9bd240869b5ec6f28964a635cd421a80fcad9dc8",
+      "input": "text",
+      "dynamic_load_pool": 2,
+      "max_tokens": 8,
+      "prompt": "请用一个词回答：测试。"
+    },
+    {
+      "key": "qwen3_vl_2b",
+      "enabled": false,
+      "model_id": "AXERA-TECH/Qwen3-VL-2B-Instruct",
+      "revision": "b88b51a9b583a5480717de7955a7b10a28dde9d4",
+      "input": "image",
+      "fixture": "tools/smoke_assets/qwen3vl_smoke_image.png",
+      "dynamic_load_pool": 2,
+      "max_tokens": 8,
+      "prompt": "请简要描述这张图片。"
+    }
+  ]
+}

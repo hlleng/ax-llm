@@ -1,7 +1,13 @@
-name: Qwen3 0.6B AX650 验证
+name: AX650 模型清单验证
 
 on:
   workflow_dispatch:
+    inputs:
+      model:
+        description: "模型 key，输入 all 验证全部启用模型"
+        required: false
+        default: "all"
+        type: string
 
 permissions:
   contents: read
@@ -34,10 +40,10 @@ jobs:
           path: build/install
 
   validate:
-    name: AX650 Qwen3 0.6B 冒烟
+    name: AX650 模型清单冒烟
     needs: build
     runs-on: [self-hosted, linux, arm64, ax650, npu]
-    timeout-minutes: 45
+    timeout-minutes: 180
     env:
       HTTP_PROXY: http://10.126.102.152:3128
       HTTPS_PROXY: http://10.126.102.152:3128
@@ -52,22 +58,20 @@ jobs:
           name: ax650-model-smoke-${{ github.sha }}
           path: .ci/ax650
 
-      - name: 验证 Qwen3 0.6B
+      - name: 验证模型清单
         run: |
           chmod +x "$GITHUB_WORKSPACE/.ci/ax650/bin/llm_smoke"
-          python3 scripts/ci/model_smoke.py \
-            --model-id AXERA-TECH/Qwen3-0.6B \
-            --revision 9bd240869b5ec6f28964a635cd421a80fcad9dc8 \
+          python3 scripts/ci/run_model_matrix.py \
+            --manifest tests/ax650_models.json \
+            --model "${{ inputs.model }}" \
             --model-root /mnt/ssd/llm_smoke \
             --binary "$GITHUB_WORKSPACE/.ci/ax650/bin/llm_smoke" \
-            --result-dir "$GITHUB_WORKSPACE/model-results/Qwen3-0.6B" \
-            --dynamic-load-pool 2 \
-            --max-tokens 8
+            --result-root "$GITHUB_WORKSPACE/model-results"
 
       - name: 上传验证结果
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qwen3-0.6b-ax650-result-${{ github.run_id }}
+          name: ax650-model-results-${{ github.run_id }}
           retention-days: 30
-          path: model-results/Qwen3-0.6B
+          path: model-results
