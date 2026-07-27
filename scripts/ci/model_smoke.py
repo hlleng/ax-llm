@@ -104,7 +104,8 @@ def main():
     args = parse_args()
     args.model_root.mkdir(parents=True, exist_ok=True)
     args.result_dir.mkdir(parents=True, exist_ok=True)
-    api = HfApi()
+    token = os.getenv("HF_TOKEN") or None
+    api = HfApi(token=token)
     info = api.model_info(args.model_id, revision=args.revision)
     revision = info.sha
     model_dir = args.model_root / args.model_id.replace("/", "--") / revision
@@ -115,6 +116,7 @@ def main():
         repo_id=args.model_id,
         revision=revision,
         local_dir=str(model_dir),
+        token=token,
     )
     config = verify_model_files(model_dir)
     test_model_dir = dynamic_load_overlay(model_dir, args.dynamic_load_pool)
