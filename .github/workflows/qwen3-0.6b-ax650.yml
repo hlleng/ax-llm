@@ -42,6 +42,7 @@ jobs:
       HTTP_PROXY: http://10.126.102.152:3128
       HTTPS_PROXY: http://10.126.102.152:3128
       NO_PROXY: localhost,127.0.0.1
+      LD_LIBRARY_PATH: /soc/lib
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +54,7 @@ jobs:
 
       - name: 验证 Qwen3 0.6B
         run: |
+          chmod +x "$GITHUB_WORKSPACE/.ci/ax650/bin/llm_smoke"
           python3 scripts/ci/model_smoke.py \
             --model-id AXERA-TECH/Qwen3-0.6B \
             --revision 9bd240869b5ec6f28964a635cd421a80fcad9dc8 \
