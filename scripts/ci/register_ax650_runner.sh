@@ -6,6 +6,7 @@ RUNNER_NAME="${RUNNER_NAME:-ax650n-01}"
 RUNNER_LABELS="${RUNNER_LABELS:-ax650,npu}"
 RUNNER_DIR="${RUNNER_DIR:-/opt/actions-runner}"
 RUNNER_USER="${RUNNER_USER:-github-runner}"
+RUNNER_SERVICE_USER="${RUNNER_SERVICE_USER:-root}"
 PROXY_URL="${PROXY_URL:-http://10.126.102.152:3128}"
 RUNNER_TOKEN="${RUNNER_TOKEN:-}"
 
@@ -63,7 +64,7 @@ else
 fi
 
 cd "${RUNNER_DIR}"
-./svc.sh install "${RUNNER_USER}"
+./svc.sh install "${RUNNER_SERVICE_USER}"
 service_name="$(systemctl list-unit-files 'actions.runner.*' --no-legend | awk 'NR == 1 {print $1}')"
 if [ -z "${service_name}" ]; then
     echo "未找到 Runner systemd 服务" >&2

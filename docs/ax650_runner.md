@@ -14,7 +14,7 @@ RUNNER_TOKEN='一次性注册令牌' bash scripts/ci/register_ax650_runner.sh
 
 脚本通过 `10.126.102.152:3128` 访问 GitHub，并为 systemd 服务设置代理。注册令牌不会写入脚本、工作流或 systemd 配置。
 
-脚本必须由 root 启动，但不会以 root 配置或运行 GitHub Runner。它会创建 `github-runner` 系统用户，以该用户调用 `config.sh` 和运行服务，因此不会触发 Runner 的 root 限制。
+脚本必须由 root 启动，并会创建 `github-runner` 系统用户，以该用户调用 `config.sh`，避免触发 Runner 的 root 配置限制。AX650 的 NPU 设备节点仅允许 root 访问，因此 systemd 服务默认以 root 运行；仓库中可调度到该 Runner 的工作流拥有板卡 root 权限，只能用于受信任分支和维护者。
 
 验证服务状态：
 
