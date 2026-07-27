@@ -49,6 +49,7 @@ jobs:
       HTTPS_PROXY: http://10.126.102.152:3128
       NO_PROXY: localhost,127.0.0.1
       LD_LIBRARY_PATH: /soc/lib
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
