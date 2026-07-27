@@ -1,10 +1,10 @@
-name: AX650 模型清单验证
+name: AX650 Model Smoke Tests
 
 on:
   workflow_dispatch:
     inputs:
       model:
-        description: "模型 key，输入 all 验证全部启用模型"
+        description: "Model key. Use all to validate every enabled model."
         required: false
         default: "all"
         type: string
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    name: 构建 AX650 冒烟工具
+    name: Build AX650 Smoke Tool
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -26,13 +26,13 @@ jobs:
         with:
           submodules: true
 
-      - name: 安装构建依赖
+      - name: Install Build Dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake build-essential unzip wget
 
-      - name: 交叉构建
+      - name: Cross-Compile
         run: bash -euxo pipefail ./build_ax650.sh
 
-      - name: 上传板端验证产物
+      - name: Upload Target Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ax650-model-smoke-${{ github.sha }}
@@ -40,7 +40,7 @@ jobs:
           path: build/install
 
   validate:
-    name: AX650 模型清单冒烟
+    name: Run AX650 Model Smoke Tests
     needs: build
     runs-on: [self-hosted, linux, arm64, ax650, npu]
     timeout-minutes: 180
@@ -53,23 +53,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 下载板端验证产物
+      - name: Download Target Artifact
         uses: actions/download-artifact@v4
         with:
           name: ax650-model-smoke-${{ github.sha }}
           path: .ci/ax650
 
-      - name: 验证模型清单
+      - name: Run Model Manifest
         run: |
           chmod +x "$GITHUB_WORKSPACE/.ci/ax650/bin/llm_smoke"
           python3 scripts/ci/run_model_matrix.py \
-            --manifest tests/ax650_models.json \
+            --manifest .github/tests/ax650_models.json \
             --model "${{ inputs.model }}" \
             --model-root /mnt/ssd/llm_smoke \
             --binary "$GITHUB_WORKSPACE/.ci/ax650/bin/llm_smoke" \
             --result-root "$GITHUB_WORKSPACE/model-results"
 
-      - name: 上传验证结果
+      - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:

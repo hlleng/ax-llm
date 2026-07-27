@@ -1,6 +1,6 @@
 # AX650 模型清单验证
 
-模型清单位于 `tests/ax650_models.json`。每条记录必须固定 `model_id` 与 Hugging Face `revision`，避免上游更新改变既有验证结果。
+模型清单位于 `.github/tests/ax650_models.json`。每条记录必须固定 `model_id` 与 Hugging Face `revision`，避免上游更新改变既有验证结果。
 
 字段说明：
 
