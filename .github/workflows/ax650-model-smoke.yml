@@ -1,29 +1,92 @@
 name: AX650 Model Smoke Tests
 
 on:
+  schedule:
+    - cron: "0 16 * * *"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Select smoke to test pinned revisions, or scan-updates to test new upstream revisions."
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+          - scan-updates
       model:
-        description: "Model key. Use all to validate every enabled model."
+        description: "Model key for smoke mode. Use all to validate every enabled model."
         required: false
         default: "all"
         type: string
 
 permissions:
-  contents: read
+  contents: write
+
+env:
+  TARGET_BRANCH: axllm
 
 concurrency:
   group: ax650-model-validation
   cancel-in-progress: false
 
 jobs:
+  scan:
+    name: Scan for Upstream Model Updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      has_updates: ${{ steps.scan.outputs.has_updates }}
+      update_scan: ${{ steps.scan.outputs.update_scan }}
+      source_sha: ${{ steps.scan.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Update Scan Dependencies
+        run: python3 -m pip install --disable-pip-version-check "huggingface_hub>=0.24,<1"
+
+      - name: Detect Model Updates
+        id: scan
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" || "${{ inputs.mode }}" == "scan-updates" ]]; then
+            python3 scripts/ci/check_model_updates.py \
+              --manifest .github/tests/ax650_models.json \
+              --candidate-manifest .ci/model-update/candidate-manifest.json \
+              --summary .ci/model-update/updates.json
+            echo "update_scan=true" >> "$GITHUB_OUTPUT"
+            echo "has_updates=$(jq -r '.has_updates' .ci/model-update/updates.json)" >> "$GITHUB_OUTPUT"
+          else
+            echo "update_scan=false" >> "$GITHUB_OUTPUT"
+            echo "has_updates=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Update Candidate
+        if: steps.scan.outputs.has_updates == 'true' && steps.scan.outputs.update_scan == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax650-model-update-${{ github.run_id }}
+          retention-days: 30
+          path: .ci/model-update
+
   build:
     name: Build AX650 Smoke Tool
+    needs: scan
+    if: needs.scan.outputs.has_updates == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TARGET_BRANCH }}
           submodules: true
 
       - name: Install Build Dependencies
@@ -41,7 +104,8 @@ jobs:
 
   validate:
     name: Run AX650 Model Smoke Tests
-    needs: build
+    needs: [scan, build]
+    if: needs.scan.outputs.has_updates == 'true'
     runs-on: [self-hosted, linux, arm64, ax650, npu]
     timeout-minutes: 180
     env:
@@ -52,6 +116,8 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
 
       - name: Download Target Artifact
         uses: actions/download-artifact@v4
@@ -59,12 +125,25 @@ jobs:
           name: ax650-model-smoke-${{ github.sha }}
           path: .ci/ax650
 
+      - name: Download Update Candidate
+        if: needs.scan.outputs.update_scan == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: ax650-model-update-${{ github.run_id }}
+          path: .ci/model-update
+
       - name: Run Model Manifest
         run: |
+          manifest=.github/tests/ax650_models.json
+          model="${{ inputs.model }}"
+          if [[ "${{ needs.scan.outputs.update_scan }}" == "true" ]]; then
+            manifest=.ci/model-update/candidate-manifest.json
+            model=all
+          fi
           chmod +x "$GITHUB_WORKSPACE/.ci/ax650/bin/llm_smoke"
           python3 scripts/ci/run_model_matrix.py \
-            --manifest .github/tests/ax650_models.json \
-            --model "${{ inputs.model }}" \
+            --manifest "$manifest" \
+            --model "$model" \
             --model-root /mnt/ssd/llm_smoke \
             --binary "$GITHUB_WORKSPACE/.ci/ax650/bin/llm_smoke" \
             --result-root "$GITHUB_WORKSPACE/model-results"
@@ -76,3 +155,43 @@ jobs:
           name: ax650-model-results-${{ github.run_id }}
           retention-days: 30
           path: model-results
+
+  publish:
+    name: Publish Verified Model Revisions
+    needs: [scan, validate]
+    if: needs.scan.outputs.update_scan == 'true' && needs.scan.outputs.has_updates == 'true' && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+
+      - name: Download Update Candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ax650-model-update-${{ github.run_id }}
+          path: .ci/model-update
+
+      - name: Verify Branch State
+        run: |
+          git fetch origin "$TARGET_BRANCH"
+          source_sha="${{ needs.scan.outputs.source_sha }}"
+          if [[ "$(git rev-parse HEAD)" != "$source_sha" || "$(git rev-parse "origin/$TARGET_BRANCH")" != "$source_sha" ]]; then
+            echo "目标分支在检测或验证期间发生变化，拒绝覆盖，请重新运行更新扫描。" >&2
+            exit 1
+          fi
+
+      - name: Update Verified Revisions
+        run: |
+          python3 scripts/ci/update_model_revisions.py \
+            --manifest .github/tests/ax650_models.json \
+            --updates .ci/model-update/updates.json
+
+      - name: Commit and Push Revisions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/tests/ax650_models.json
+          git commit -m "ci: update verified AX650 model revisions"
+          git push origin "HEAD:$TARGET_BRANCH"
