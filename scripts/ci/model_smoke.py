@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -79,6 +80,34 @@ def disk_usage(path):
     return {"total": usage.total, "used": usage.used, "free": usage.free}
 
 
+def cmm_remaining_kb():
+    path = Path("/proc/ax_proc/mem_cmm_info")
+    if not path.is_file():
+        return None
+    match = re.search(r"remain=(\d+)KB", path.read_text(encoding="utf-8", errors="replace"))
+    return int(match.group(1)) if match else None
+
+
+def ddr_available_kb():
+    path = Path("/proc/meminfo")
+    if not path.is_file():
+        return None
+    match = re.search(r"^MemAvailable:\s+(\d+)\s+kB$", path.read_text(encoding="utf-8"), re.MULTILINE)
+    return int(match.group(1)) if match else None
+
+
+def resource_snapshot(model_root):
+    return {
+        "cmm_remaining_kb": cmm_remaining_kb(),
+        "ddr_available_kb": ddr_available_kb(),
+        "flash": disk_usage(model_root),
+    }
+
+
+def directory_size_bytes(path):
+    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+
+
 def dynamic_load_overlay(model_dir, pool_size):
     if pool_size <= 0:
         return model_dir
@@ -128,6 +157,7 @@ def main():
         "test_model_dir": str(test_model_dir),
         "tokenizer_type": config.get("tokenizer_type"),
         "axmodel_num": config["axmodel_num"],
+        "model_size_bytes": directory_size_bytes(model_dir),
         "dynamic_load_pool_size": args.dynamic_load_pool,
         "media": "image" if args.image else "video" if args.video else "audio" if args.audio else "text",
         "disk": disk_usage(args.model_root),
@@ -151,30 +181,47 @@ def main():
         elif args.audio is not None:
             command.extend(["--audio", str(args.audio)])
         log_path = args.result_dir / "llm_smoke.log"
+        summary["resources_before"] = resource_snapshot(args.model_root)
         print("执行: " + " ".join(command), flush=True)
         started_at = time.monotonic()
-        with log_path.open("w", encoding="utf-8") as log_file:
-            completed = subprocess.run(
-                command,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=args.timeout_seconds,
-                check=False,
+        try:
+            with log_path.open("w", encoding="utf-8") as log_file:
+                completed = subprocess.run(
+                    command,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=args.timeout_seconds,
+                    check=False,
+                )
+            output = log_path.read_text(encoding="utf-8", errors="replace")
+            summary["return_code"] = completed.returncode
+            decode_rates = re.findall(r"decode avg\s+([0-9.]+)\s+token/s", output)
+            if decode_rates:
+                summary["decode_tokens_per_second"] = float(decode_rates[-1])
+            if completed.returncode != 0:
+                raise RuntimeError(f"llm_smoke 退出码异常: {completed.returncode}")
+            if "[SMOKE OK]" not in output:
+                raise RuntimeError("llm_smoke 未输出成功标记")
+            summary["status"] = "passed"
+        except Exception as error:
+            summary["status"] = "failed"
+            summary["error"] = str(error)
+            raise
+        finally:
+            summary["duration_seconds"] = round(time.monotonic() - started_at, 3)
+            summary["resources_after"] = resource_snapshot(args.model_root)
+            (args.result_dir / "summary.json").write_text(
+                json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
             )
-        output = log_path.read_text(encoding="utf-8", errors="replace")
-        summary["duration_seconds"] = round(time.monotonic() - started_at, 3)
-        summary["return_code"] = completed.returncode
-        if completed.returncode != 0:
-            raise RuntimeError(f"llm_smoke 退出码异常: {completed.returncode}")
-        if "[SMOKE OK]" not in output:
-            raise RuntimeError("llm_smoke 未输出成功标记")
-        summary["status"] = "passed"
 
-    (args.result_dir / "summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    if args.binary is None:
+        (args.result_dir / "summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
     print(json.dumps(summary, ensure_ascii=False), flush=True)
 
 

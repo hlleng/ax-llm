@@ -60,6 +60,13 @@ def fixture_path(repo_root, model):
     return path
 
 
+def load_model_summary(result_dir):
+    path = result_dir / "summary.json"
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def main():
     args = parse_args()
     models = load_models(args.manifest)
@@ -106,6 +113,7 @@ def main():
         print(f"开始验证模型: {model['key']}", flush=True)
         completed = subprocess.run(command, check=False)
         after_cmm = cmm_remaining_kb()
+        model_summary = load_model_summary(result_dir)
         result = {
             "key": model["key"],
             "model_id": model["model_id"],
@@ -116,6 +124,15 @@ def main():
             "cmm_after_kb": after_cmm,
             "status": "passed" if completed.returncode == 0 else "failed",
         }
+        for field in (
+            "decode_tokens_per_second",
+            "duration_seconds",
+            "model_size_bytes",
+            "resources_before",
+            "resources_after",
+        ):
+            if field in model_summary:
+                result[field] = model_summary[field]
         if before_cmm is not None and after_cmm is not None:
             leak_kb = before_cmm - after_cmm
             result["cmm_leak_kb"] = leak_kb

@@ -157,9 +157,9 @@ jobs:
           path: model-results
 
   publish:
-    name: Publish Verified Model Revisions
+    name: Publish Smoke Test Results
     needs: [scan, validate]
-    if: needs.scan.outputs.update_scan == 'true' && needs.scan.outputs.has_updates == 'true' && needs.validate.result == 'success'
+    if: needs.scan.outputs.has_updates == 'true' && needs.validate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -168,6 +168,7 @@ jobs:
           ref: ${{ env.TARGET_BRANCH }}
 
       - name: Download Update Candidate
+        if: needs.scan.outputs.update_scan == 'true'
         uses: actions/download-artifact@v4
         with:
           name: ax650-model-update-${{ github.run_id }}
@@ -183,15 +184,35 @@ jobs:
           fi
 
       - name: Update Verified Revisions
+        if: needs.scan.outputs.update_scan == 'true'
         run: |
           python3 scripts/ci/update_model_revisions.py \
             --manifest .github/tests/ax650_models.json \
             --updates .ci/model-update/updates.json
 
-      - name: Commit and Push Revisions
+      - name: Download Test Results
+        uses: actions/download-artifact@v4
+        with:
+          name: ax650-model-results-${{ github.run_id }}
+          path: .ci/model-results
+
+      - name: Append Markdown Report
+        run: |
+          mode=smoke
+          if [[ "${{ needs.scan.outputs.update_scan }}" == "true" ]]; then
+            mode=scan-updates
+          fi
+          python3 scripts/ci/render_model_report.py \
+            --result-root .ci/model-results \
+            --report docs/ax650_model_results.md \
+            --source-sha "${{ needs.scan.outputs.source_sha }}" \
+            --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --mode "$mode"
+
+      - name: Commit and Push Results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/tests/ax650_models.json
-          git commit -m "ci: update verified AX650 model revisions"
+          git add .github/tests/ax650_models.json docs/ax650_model_results.md
+          git commit -m "ci: record AX650 model smoke results"
           git push origin "HEAD:$TARGET_BRANCH"
