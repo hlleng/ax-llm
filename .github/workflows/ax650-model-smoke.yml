@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   scan:
-    name: Scan for Upstream Model Updates
+    name: Prepare Test Scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -44,14 +44,16 @@ jobs:
           ref: ${{ env.TARGET_BRANCH }}
 
       - name: Set Up Python
+        if: github.event_name == 'schedule' || inputs.mode == 'scan-updates'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install Update Scan Dependencies
+        if: github.event_name == 'schedule' || inputs.mode == 'scan-updates'
         run: python3 -m pip install --disable-pip-version-check "huggingface_hub>=0.24,<1"
 
-      - name: Detect Model Updates
+      - name: Determine Test Scope
         id: scan
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -65,6 +67,7 @@ jobs:
             echo "update_scan=true" >> "$GITHUB_OUTPUT"
             echo "has_updates=$(jq -r '.has_updates' .ci/model-update/updates.json)" >> "$GITHUB_OUTPUT"
           else
+            echo "Smoke mode: using manifest-pinned model revisions."
             echo "update_scan=false" >> "$GITHUB_OUTPUT"
             echo "has_updates=true" >> "$GITHUB_OUTPUT"
           fi
