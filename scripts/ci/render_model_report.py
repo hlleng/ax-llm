@@ -28,10 +28,9 @@ def format_gib(value):
     return "-" if value is None else f"{value / 1024 ** 3:.2f}"
 
 
-def format_memory(summary, name):
-    before = summary.get("resources_before", {}).get(name)
+def format_available_memory(summary, name):
     after = summary.get("resources_after", {}).get(name)
-    return f"{format_mib(before)} -> {format_mib(after)}"
+    return format_mib(after)
 
 
 def format_flash(summary):
@@ -50,10 +49,10 @@ def create_header():
 
 该文件由 GitHub Actions 在模型冒烟测试成功后自动追加。每个表格记录一次成功验证，便于观察模型版本、性能和板端资源变化。
 
-- CMM：`/proc/ax_proc/mem_cmm_info` 中的可用 CMM，单位 MiB，记录 `llm_smoke` 运行前 -> 运行后。
-- DDR：`/proc/meminfo` 中的 `MemAvailable`，单位 MiB，记录运行前 -> 运行后。
+- CMM：`/proc/ax_proc/mem_cmm_info` 中的可用 CMM，单位 MiB，记录 `llm_smoke` 完成后的数值。
+- DDR：`/proc/meminfo` 中的 `MemAvailable`，单位 MiB，记录 `llm_smoke` 完成后的数值。
 - FLASH：模型目录实际文件大小，以及 `/mnt/ssd/llm_smoke` 所在文件系统在测试后的可用容量。
-- 这些数据是前后快照，不代表测试过程中的峰值占用。
+- CMM 和 DDR 是测试结束后的快照，不代表测试过程中的峰值占用。
 """
 
 
@@ -64,18 +63,15 @@ def main():
     for result in matrix.get("models", []):
         summary_path = args.result_root / result["key"] / "summary.json"
         summary = load_json(summary_path) if summary_path.is_file() else result
-        decode = summary.get("decode_tokens_per_second")
-        decode_text = "-" if decode is None else f"{decode:.2f}"
         duration = summary.get("duration_seconds")
         duration_text = "-" if duration is None else f"{duration:.3f}"
         rows.append(
-            "| {model} | `{revision}` | {input_type} | {decode} | {cmm} | {ddr} | {flash} | {duration} | {status} |".format(
+            "| {model} | `{revision}` | {input_type} | {cmm} | {ddr} | {flash} | {duration} | {status} |".format(
                 model=escape(summary.get("model_id", result["model_id"])),
                 revision=escape(summary.get("revision", result["revision"])),
                 input_type=escape(summary.get("media", result["input"])),
-                decode=decode_text,
-                cmm=format_memory(summary, "cmm_remaining_kb"),
-                ddr=format_memory(summary, "ddr_available_kb"),
+                cmm=format_available_memory(summary, "cmm_remaining_kb"),
+                ddr=format_available_memory(summary, "ddr_available_kb"),
                 flash=format_flash(summary),
                 duration=duration_text,
                 status=escape(summary.get("status", result["status"])),
@@ -89,7 +85,7 @@ def main():
         args.report.write_text(create_header(), encoding="utf-8")
 
     timestamp = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S %Z")
-    section = "\n\n## {timestamp}\n\n- 模式：`{mode}`\n- 源码提交：`{sha}`\n- 工作流：{url}\n\n| 模型 | Revision | 输入 | Decode (tok/s) | CMM 可用 (MiB，前 -> 后) | DDR 可用 (MiB，前 -> 后) | FLASH | 耗时 (s) | 结果 |\n|---|---|---|---:|---|---|---|---:|---|\n{rows}\n".format(
+    section = "\n\n## {timestamp}\n\n- 模式：`{mode}`\n- 源码提交：`{sha}`\n- 工作流：{url}\n\n| 模型 | Revision | 输入 | CMM 可用 (MiB) | DDR 可用 (MiB) | FLASH | 耗时 (s) | 结果 |\n|---|---|---|---:|---:|---|---:|---|\n{rows}\n".format(
         timestamp=timestamp,
         mode=args.mode,
         sha=args.source_sha,
