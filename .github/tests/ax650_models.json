@@ -41,6 +41,16 @@
     "dynamic_load_pool": 2,
     "max_tokens": 8,
     "prompt": "请简要描述这张图片"
+    },
+    {
+    "key": "minicpm5_1b",
+    "enabled": true,
+    "model_id": "AXERA-TECH/MiniCPM5-1B",
+    "revision": "59d74f7ce4028c2a5f15318ddf8e777ef73695ec",
+    "input": "text",
+    "dynamic_load_pool": 2,
+    "max_tokens": 8,
+    "prompt": "你是谁"
     }
   ]
 }
