@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from huggingface_hub import HfApi, snapshot_download
+from huggingface_hub import HfApi
 
 
 def parse_args():
@@ -20,6 +20,7 @@ def parse_args():
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--result-dir", required=True, type=Path)
     parser.add_argument("--max-tokens", type=int, default=8)
+    parser.add_argument("--download-timeout-seconds", type=int, default=900)
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--prompt", default="请用一个词回答：测试。")
     parser.add_argument("--dynamic-load-pool", type=int, default=0)
@@ -108,6 +109,30 @@ def directory_size_bytes(path):
     return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
+def download_model(model_id, revision, model_dir, timeout_seconds):
+    if timeout_seconds <= 0:
+        raise RuntimeError("模型下载超时必须为正整数")
+    command = [
+        sys.executable,
+        str(Path(__file__).with_name("download_model_snapshot.py")),
+        "--model-id",
+        model_id,
+        "--revision",
+        revision,
+        "--model-dir",
+        str(model_dir),
+    ]
+    try:
+        subprocess.run(command, check=True, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            f"模型下载超时（{timeout_seconds} 秒），已终止下载进程；"
+            "不完整缓存将保留供下次续传"
+        ) from error
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"模型下载失败，退出码: {error.returncode}") from error
+
+
 def dynamic_load_overlay(model_dir, pool_size):
     if pool_size <= 0:
         return model_dir
@@ -140,13 +165,12 @@ def main():
     model_dir = args.model_root / args.model_id.replace("/", "--") / revision
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"下载模型 {args.model_id}，revision={revision}", flush=True)
-    snapshot_download(
-        repo_id=args.model_id,
-        revision=revision,
-        local_dir=str(model_dir),
-        token=token,
+    print(
+        f"下载模型 {args.model_id}，revision={revision}，"
+        f"总超时={args.download_timeout_seconds} 秒",
+        flush=True,
     )
+    download_model(args.model_id, revision, model_dir, args.download_timeout_seconds)
     config = verify_model_files(model_dir)
     test_model_dir = dynamic_load_overlay(model_dir, args.dynamic_load_pool)
     verify_model_files(test_model_dir)

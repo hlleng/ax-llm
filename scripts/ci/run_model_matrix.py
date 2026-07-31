@@ -14,6 +14,7 @@ def parse_args():
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--model-root", type=Path)
     parser.add_argument("--result-root", type=Path)
+    parser.add_argument("--download-timeout-seconds", type=int, default=900)
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--cmm-leak-limit-mb", type=int, default=64)
     parser.add_argument("--list", action="store_true")
@@ -103,6 +104,9 @@ def main():
             "--result-dir", str(result_dir),
             "--binary", str(args.binary),
             "--max-tokens", str(model.get("max_tokens", 8)),
+            "--download-timeout-seconds", str(
+                model.get("download_timeout_seconds", args.download_timeout_seconds)
+            ),
             "--timeout-seconds", str(args.timeout_seconds),
             "--prompt", model.get("prompt", "请用一个词回答：测试。"),
             "--dynamic-load-pool", str(model.get("dynamic_load_pool", 0)),
