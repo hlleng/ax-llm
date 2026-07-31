@@ -91,7 +91,7 @@ def main():
     model_script = Path(__file__).with_name("model_smoke.py")
     args.result_root.mkdir(parents=True, exist_ok=True)
     results = []
-    stop_after_leak = False
+    stop_after_failure = False
     for model in selected:
         before_cmm = cmm_remaining_kb()
         result_dir = args.result_root / model["key"]
@@ -128,6 +128,9 @@ def main():
             "cmm_after_kb": after_cmm,
             "status": "passed" if completed.returncode == 0 else "failed",
         }
+        if completed.returncode != 0:
+            result["error"] = "模型下载或推理失败，停止后续模型验证"
+            stop_after_failure = True
         for field in (
             "decode_tokens_per_second",
             "duration_seconds",
@@ -143,9 +146,9 @@ def main():
             if leak_kb > args.cmm_leak_limit_mb * 1024:
                 result["status"] = "failed"
                 result["error"] = "CMM 未恢复到允许范围，停止后续模型验证"
-                stop_after_leak = True
+                stop_after_failure = True
         results.append(result)
-        if stop_after_leak:
+        if stop_after_failure:
             break
 
     summary = {
