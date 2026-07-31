@@ -112,9 +112,6 @@ jobs:
     runs-on: [self-hosted, linux, arm64, ax650, npu]
     timeout-minutes: 180
     env:
-      HTTP_PROXY: http://10.126.102.152:3128
-      HTTPS_PROXY: http://10.126.102.152:3128
-      NO_PROXY: localhost,127.0.0.1
       LD_LIBRARY_PATH: /soc/lib
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
