@@ -31,3 +31,15 @@
 | 模型 | Revision | 输入 | CMM 可用 (MiB) | DDR 可用 (MiB) | FLASH | 耗时 (s) | 结果 |
 |---|---|---|---:|---:|---|---:|---|
 | AXERA-TECH/MiniCPM5-1B | `adf420c18a443904ab88a1b88aa3f9389eafa575` | text | 4339.6 | 2786.2 | 模型 1464.2 MiB; 可用 190.96 GiB | 13.421 | passed |
+
+
+## 2026-08-26 01:09:31 CST
+
+- 模式：`scan-updates`
+- 源码提交：`352a67376dce76534b36219baac37a9153400978`
+- 工作流：https://github.com/hlleng/ax-llm/actions/runs/32873697972
+
+| 模型 | Revision | 输入 | CMM 可用 (MiB) | DDR 可用 (MiB) | FLASH | 耗时 (s) | 结果 |
+|---|---|---|---:|---:|---|---:|---|
+| AXERA-TECH/Qwen3-VL-2B-Instruct-GPTQ-Int4 | `16fe252a65016ba1ad44e92a60cfc879462fac4c` | image | 4339.6 | 2998.7 | 模型 4299.8 MiB; 可用 186.62 GiB | 25.438 | passed |
+| AXERA-TECH/MiniCPM5-1B | `dd7e37c9ce9f2f9018973e57c0d37a7a2964272a` | text | 4339.6 | 2968.5 | 模型 1464.4 MiB; 可用 185.19 GiB | 12.222 | passed |
